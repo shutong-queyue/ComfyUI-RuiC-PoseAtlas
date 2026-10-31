@@ -80,7 +80,8 @@ class RuiCPoseAtlasLoader:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "质量": (["缩略图", "原图"],),
+                # 默认第一项即默认值：默认出原图，避免误用缩略图（400x500 级别）
+                "质量": (["原图", "缩略图"],),
                 "随机种子": ("INT", {"default": 0, "min": 0, "max": 2147483647}),
                 "每次随机": ("BOOLEAN", {"default": False}),
                 "启用_人像": ("BOOLEAN", {"default": True}),
@@ -164,6 +165,7 @@ class RuiCPoseAtlasLoader:
                 out_info.append(f"【{label}】取图失败：{item['id']}")
                 continue
             out_imgs.append(_to_tensor(img))
-            out_info.append(f"【{label}】{item['id']}　·　{item['name']}")
+            out_info.append(f"【{label}】{item['id']}　·　{item['name']}"
+                            f"　·　{img.width}×{img.height}")
 
         return (out_imgs[0], out_imgs[1], out_imgs[2], "\n".join(out_info))

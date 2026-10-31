@@ -483,18 +483,29 @@ class AtlasManager:
         return cache_dir / (h + ext)
 
     def candidate_urls(self, item, quality: str) -> List[str]:
-        """按线路顺序给出该素材的候选地址（镜像之间路径一致，可互换）。"""
+        """按线路顺序给出该素材的候选地址（镜像之间路径一致，可互换）。
+
+        缩略图：优先按相对路径走各镜像（thumbs 在各站点都齐全，命中快）。
+        原图：优先用 item 自带的 primary 地址。人像原图（4.5GB 级）并未随仓库发布，
+        portrait/img/*.png 在 GitHub Pages 与 jsDelivr 上均为 404，只有 primary
+        （ai-portrait-gallery.pages.dev）能取到，先试镜像只会白等三个 404。
+        """
         rel = item.get("thumb_rel") if quality == "thumb" else item.get("full_rel")
         primary = item.get("thumb_url") if quality == "thumb" else item.get("full_url")
         urls: List[str] = []
+
+        def _add(u):
+            if u and u not in urls:
+                urls.append(u)
+
+        if quality != "thumb":
+            _add(primary)
         if rel:
             rel = str(rel).lstrip("/")
             for base in _ordered_bases():
-                u = base + rel
-                if u not in urls:
-                    urls.append(u)
-        if primary and primary not in urls:
-            urls.append(primary)
+                _add(base + rel)
+        if quality == "thumb":
+            _add(primary)
         return urls
 
     def get_image(self, item, quality: str, allow_remote: bool = True):
