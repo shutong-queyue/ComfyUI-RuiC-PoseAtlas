@@ -9,7 +9,7 @@
 
 const app = (window.comfyAPI && window.comfyAPI.app && window.comfyAPI.app.app) || window.app;
 
-console.log("[RuiC PoseAtlas] 前端扩展脚本已加载 v4.2，app =", app ? "ok" : "MISSING");
+console.log("[RuiC PoseAtlas] 前端扩展脚本已加载 v4.3（顶栏新增 质量 / 种子），app =", app ? "ok" : "MISSING");
 
 // 三条线路（站点根 = 仓库根，路径一致，可互为镜像）
 const SITE_BASES = [
@@ -84,12 +84,22 @@ const STYLE = `
   padding:0 0 8px 0;   /* 底部留白，卡片不贴节点底边 */
   font-family:system-ui,"Microsoft YaHei",sans-serif;color:#e6e6e6;overflow:hidden;}
 .ruic-wrap *{box-sizing:border-box;}
-.ruic-top{display:flex;align-items:center;gap:8px;flex:none;}
+.ruic-top{display:flex;align-items:center;gap:8px;flex:none;flex-wrap:wrap;row-gap:6px;}
 .ruic-top button{background:#2b2b3a;color:#fff;border:1px solid #444;border-radius:6px;padding:5px 10px;cursor:pointer;
   font-size:12px;white-space:nowrap;flex:none;}
 .ruic-top button:hover{border-color:#7c5cff;background:#34344a;}
 .ruic-top .ruic-open{margin-left:auto;background:#22304a;border-color:#3a5a8a;color:#bcd8ff;}
 .ruic-top .ruic-open:hover{border-color:#5b8fd6;background:#2a3d5c;}
+/* 原生控件被隐藏，质量 / 种子在顶栏给出等价入口 */
+.ruic-ctl{display:flex;align-items:center;gap:5px;flex:none;font-size:12px;color:#cfcfe0;}
+.ruic-ctl .ruic-lbl{opacity:.72;white-space:nowrap;}
+.ruic-top .ruic-quality,.ruic-top .ruic-seed{background:#2b2b3a;color:#fff;border:1px solid #444;border-radius:6px;
+  padding:4px 6px;font-size:12px;height:28px;box-sizing:border-box;outline:none;}
+.ruic-top .ruic-quality:hover,.ruic-top .ruic-seed:hover{border-color:#7c5cff;}
+.ruic-top .ruic-quality:focus,.ruic-top .ruic-seed:focus{border-color:#7c5cff;}
+.ruic-top .ruic-seed{width:110px;}
+.ruic-top .ruic-seed::-webkit-outer-spin-button,
+.ruic-top .ruic-seed::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
 .ruic-cards{flex:1 1 auto;min-height:0;min-width:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
   gap:8px;overflow:hidden;}
 .ruic-card{min-width:0;min-height:0;background:#1c1c28;border:1px solid #333;border-radius:10px;padding:8px;
@@ -273,9 +283,50 @@ if (!app || typeof app.registerExtension !== "function") {
         <div class="ruic-top">
           <button class="ruic-combo" title="${HINT_COMBO}">🎲 随机组合</button>
           <button class="ruic-update" title="${HINT_SEED}">↻ 按种子刷新</button>
+          <span class="ruic-ctl" title="取图质量：原图 = 素材真实分辨率；缩略图约 400×500，仅适合快速试参">
+            <span class="ruic-lbl">质量</span>
+            <select class="ruic-quality"><option value="原图">原图</option><option value="缩略图">缩略图</option></select>
+          </span>
+          <span class="ruic-ctl" title="按种子选图时的数值：改这里可复现或切换组合，等价于原生「随机种子」">
+            <span class="ruic-lbl">种子</span>
+            <input class="ruic-seed" type="number" min="0" max="2147483647" step="1">
+          </span>
           <button class="ruic-open" title="在浏览器打开 RuiC 图鉴素材库">🔗 打开素材库</button>
         </div>
         <div class="ruic-cards">${KIND_CFG.map(cardHTML).join("")}</div>`;
+
+      // 质量 / 种子：原生控件已被整体隐藏，这里给出等价入口并双向同步，
+      // 否则用户只能靠"按种子刷新"盲改，无法选择原图分辨率。
+      const qSel = wrap.querySelector(".ruic-quality");
+      const sInp = wrap.querySelector(".ruic-seed");
+      if (qSel) {
+        const curQ = W["质量"] ? String(W["质量"].value) : "原图";
+        qSel.value = curQ.indexOf("缩略") >= 0 ? "缩略图" : "原图";
+        qSel.addEventListener("change", () => {
+          setWidget(W, "质量", qSel.value);
+          app.graph.setDirtyCanvas(true, true);
+        });
+      }
+      if (sInp) {
+        const readSeed = () => {
+          const v = parseInt((W["随机种子"] && W["随机种子"].value) || 0, 10);
+          return Number.isFinite(v) ? v : 0;
+        };
+        sInp.value = String(readSeed());
+        const commitSeed = () => {
+          let v = parseInt(sInp.value, 10);
+          if (!Number.isFinite(v) || v < 0) v = 0;
+          if (v > 2147483647) v = 2147483647;
+          sInp.value = String(v);
+          setWidget(W, "随机种子", v);
+          app.graph.setDirtyCanvas(true, true);
+        };
+        sInp.addEventListener("change", commitSeed);
+        sInp.addEventListener("blur", commitSeed);
+        sInp.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") { commitSeed(); sInp.blur(); }
+        });
+      }
 
       // DOM 控件：给一个可增长区间，litegraph 会把节点多余的高度分给它（关键：拖动节点时卡片跟着变）
       let domWidget = null;
@@ -400,11 +451,12 @@ if (!app || typeof app.registerExtension !== "function") {
         });
       });
 
-      // 种子变化时刷新未锁定卡片
+      // 种子变化时刷新未锁定卡片，并同步顶栏输入框
       if (W["随机种子"]) {
         const origCb = W["随机种子"].callback;
         W["随机种子"].callback = (v) => {
           if (typeof origCb === "function") { try { origCb(v); } catch (e) {} }
+          if (sInp && String(sInp.value) !== String(v)) sInp.value = String(v);
           for (const cfg of KIND_CFG) if (!STATE[cfg.key].lockedId) refreshPreview(cfg);
         };
       }
