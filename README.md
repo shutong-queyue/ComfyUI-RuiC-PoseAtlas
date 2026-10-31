@@ -17,13 +17,17 @@
 
 ### 方式一：ComfyUI Manager（推荐）
 
-在 Manager 里搜索 `RuiC PoseAtlas` 安装，或在「通过 Git URL 安装」中填入本仓库地址。
+在 Manager 的 **Install via Git URL** 中填入本仓库地址：
+
+```
+https://github.com/shutong-queyue/ComfyUI-RuiC-PoseAtlas
+```
 
 ### 方式二：手动
 
 ```bash
 cd ComfyUI/custom_nodes
-git clone https://github.com/<你的用户名>/ComfyUI-RuiC-PoseAtlas.git
+git clone https://github.com/shutong-queyue/ComfyUI-RuiC-PoseAtlas.git
 ```
 
 重启 ComfyUI，在节点列表里搜 **三图组合** 或 **RuiC**。
