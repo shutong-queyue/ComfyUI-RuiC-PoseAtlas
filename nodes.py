@@ -15,8 +15,11 @@ from PIL import Image
 
 try:
     from .atlas_io import get_manager, _match
+    from . import pose_depth, da_depth
 except ImportError:  # 直接以脚本方式运行时
     from atlas_io import get_manager, _match
+    import pose_depth
+    import da_depth
 
 # ---------------- 中文显示映射 ----------------
 ZH = {
@@ -68,6 +71,88 @@ def _placeholder():
     return torch.zeros((1, 1, 1, 3), dtype=torch.float32)
 
 
+# ---------------- 提示词模板 ----------------
+# 关键机制（实测结论，勿随意改动）：
+#   1) 姿势图必须接 image_1：Qwen-Image-2.1 的 latent 尺寸取自第一张参考图，
+#      且 image_1 的构图权重最高。姿势图放 image_3 时，会被"服装展示图"里的
+#      站立体轮廓压过去，导致永远出站姿。
+#   2) 只写"照搬图 1 的姿势"不够，模型会退回服装图的站姿；需要时可用占位符
+#      {姿势描述} 把素材自带的姿势中文名（+类别补语）写进提示词。
+#   3) 不要写"不微笑 / 不要露齿"。cfg=1.0 没有负向条件，"微笑"二字会被当成正向
+#      关键词，越写越笑。改成正面描述：神情平静、嘴唇自然合拢、嘴角平放。
+# 两版预设模板（前端「📝 提示词」里可以一键套用，也可以完全自己写）。
+# 图号按当前接线：姿势 = 图 1、人像 = 图 2、衣装 = 图 3。
+# 内置两版预设都不带 {姿势描述}（提示词靠「描述画面」＋深度图约束姿态）；
+# 想让提示词里出现具体姿势名，自己往模板里加 {姿势描述} 即可。
+PROMPT_LINECOAT = (
+    "严格保留图 2 人物的面部特征、脸型、五官比例、发型、肤色与皮肤质感，保持同一个人物身份，不换脸。"
+    "人物穿戴图 3 全套服饰，复刻服装版型、剪裁、面料纹理、配色与装饰细节，"
+    "衣物跟随姿态自然贴合身体，生成符合受力变化的布料褶皱，不复制图 3 的人脸、姿态。\n"
+    "图 1 是线稿动态参考，"
+    "仅提取画面里的全身姿态、躯干朝向、四肢位置、重心、透视与肢体比例；"
+    "禁止继承线稿、轮廓线条、关节、素描白底、空白头部。\n"
+    "表情根据当前肢体动作全新生成，表情、神态和身体姿态协调适配，不沿用任意一张参考图自带的表情。"
+    "画面仅出现这一名角色，肢体完整无截断，人体结构准确。"
+    "柔和均匀棚拍光，低干扰中性灰纯色背景，皮肤肌理真实，服装纹理清晰，"
+    "统一光影与自然接触阴影。输出一张完整摄影作品，"
+    "禁止线稿、素描草图、拼贴、分屏、多余人物、畸形手指、文字、水印。"
+)
+
+PROMPT_DEPTH = (
+    "严格保留图 2 人物的面部特征、脸型、五官比例、发型、肤色与真实皮肤质感，保持同一个人物身份，不换脸。"
+    "将图 3 服装完整穿到该人物身上，复刻服装版型、剪裁结构、面料纹理、配色与装饰细节，"
+    "衣物自然贴合身体与动作，产生合理褶皱和受力变化，不复制图 3 的人脸、姿势或背景。\n"
+    "图 1 是深度图与姿态结构参考，"
+    "仅用于控制最终人物的躯干朝向、四肢位置、动作姿态、重心分配、观察角度、前后层次和空间透视关系；"
+    "不要继承图 1 中的人物身份、脸部、服装、背景或任何外观内容。"
+    "最终人物只采用图 1 提供的动作结构，不保留图 1 的原表情。\n"
+    "表情根据当前动作重新生成：结合姿态的情绪、身体重心和手部动作，设计自然、合理、符合动作语境的新表情，"
+    "表情与眼神、嘴部、面部肌肉协调，不机械沿用参考表情。"
+    "三者融合为同一个人物，画面仅出现一人，根据姿势需要保留完整肢体，人物与服装结构连续自然。\n"
+    "柔和均匀棚拍光，低干扰中性灰摄影空间，细节层次清晰，真实皮肤纹理，合理人体结构，"
+    "清晰服装纹理，统一光影与自然接触阴影。输出一张完整摄影作品，"
+    "避免三图拼贴、分屏、多余人物、重复肢体、畸形手指、文字和水印。"
+)
+
+DEFAULT_PROMPT = PROMPT_LINECOAT
+
+# 姿势类别 -> 身体状态补语（只补"整个人在什么状态"，不描述具体四肢，
+# 具体姿态交给图 1 和姿势名）
+_POSE_BODY = [
+    (("趴", "卧"), "整个人躺在地面上，身体贴着地面"),
+    (("坐",), "整个人坐在地面上"),
+    (("跪", "蹲"), "双膝着地，蹲跪在地面上"),
+    (("站", "立"), "双脚站在地面上"),
+]
+
+
+def _pose_sentence(item):
+    """把姿势条目编成一句可直接进提示词的中文描述。"""
+    if not item:
+        return "自然站立"
+    name = (item.get("name") or item.get("id") or "").strip()
+    cat = ((item.get("sub") or {}).get("category") or "").strip()
+    body = ""
+    for keys, desc in _POSE_BODY:
+        if any(k in cat for k in keys):
+            body = desc
+            break
+    seg = name
+    if cat:
+        seg += f"（{cat}" + (f"：{body}" if body else "") + "）"
+    if cat and not any(k in cat for k in ("站", "立")):
+        seg += "，不要站姿"
+    return seg
+
+
+def build_prompt(template, pose_item, has_pose=True):
+    tpl = (template or DEFAULT_PROMPT).strip() or DEFAULT_PROMPT
+    sentence = _pose_sentence(pose_item) if has_pose else "自然站立"
+    out = tpl.replace("{姿势描述}", sentence)
+    out = out.replace("{姿势}", (pose_item or {}).get("name", "") if has_pose else "")
+    return out
+
+
 def _to_tensor(img: Image.Image):
     arr = np.asarray(img.convert("RGB"), dtype=np.float32) / 255.0
     return torch.from_numpy(arr)[None, ...]  # [1,H,W,3]
@@ -102,17 +187,29 @@ class RuiCPoseAtlasLoader:
                 "姿势_分类": _options("pose_category"),
                 "姿势_视角": _options("pose_angle"),
             },
+            # 放 optional：旧工作流没有这一项时也能跑（缺省用 DEFAULT_PROMPT），
+            # 不会被判成 required_input_missing。
+            "optional": {
+                "提示词模板": ("STRING", {"default": DEFAULT_PROMPT, "multiline": True,
+                                      "tooltip": "可用占位符：{姿势描述} = 姿势名+类别（推荐）；{姿势} = 仅姿势名。"
+                                                 "本节点会把它填好后从「提示词」输出口送出，直接连给文本编码器。"}),
+                # 必须排在提示词模板之后：widgets_values 按位置赋值，插到中间会让旧工作流错位。
+                # 存的是「当前要转深度图的那一张姿势的 ID」，空 = 全部输出线稿。
+                # 前端点姿势卡片里的「转深度图」就写入当前 ID；换图时自动清空。
+                "姿势深度ID": ("STRING", {"default": "", "multiline": False,
+                                       "tooltip": "只把这一张姿势转成深度图。换图后前端会自动清空，恢复线稿。"}),
+            },
         }
 
-    RETURN_TYPES = ("IMAGE", "IMAGE", "IMAGE", "STRING")
-    RETURN_NAMES = ("人像", "衣装", "姿势", "信息")
+    RETURN_TYPES = ("IMAGE", "IMAGE", "IMAGE", "STRING", "STRING")
+    RETURN_NAMES = ("人像", "衣装", "姿势", "信息", "提示词")
     FUNCTION = "load"
 
     def load(self, 质量, 随机种子, 每次随机,
              启用_人像, 启用_衣装, 启用_姿势,
              人像_选定ID, 衣装_选定ID, 姿势_选定ID,
              人像_分区, 人像_发型, 衣装_季节, 衣装_品类, 衣装_色系,
-             姿势_系列, 姿势_分类, 姿势_视角):
+             姿势_系列, 姿势_分类, 姿势_视角, 提示词模板=None, 姿势深度ID=""):
         m = get_manager(None)
         q = "thumb" if 质量 == "缩略图" else "full"
         seed = int(随机种子)
@@ -128,6 +225,7 @@ class RuiCPoseAtlasLoader:
 
         out_imgs = []
         out_info = []
+        pose_item = None
         for kind, label, enabled, locked_id, offset, filters in specs:
             if not enabled:
                 out_imgs.append(_placeholder())
@@ -157,6 +255,8 @@ class RuiCPoseAtlasLoader:
                     continue
                 item = pool[(seed + offset) % len(pool)]
 
+            if kind == "pose":
+                pose_item = item
             img = m.get_image(item, q)
             if img is None:
                 the_url = item.get("thumb_url") if q == "thumb" else item.get("full_url")
@@ -164,8 +264,17 @@ class RuiCPoseAtlasLoader:
                 out_imgs.append(_placeholder())
                 out_info.append(f"【{label}】取图失败：{item['id']}")
                 continue
+            tag = ""
+            if kind == "pose" and str(姿势深度ID or "").strip() == str(item.get("id")):
+                dep_img, how = da_depth.pose_to_depth(img)
+                if dep_img is None:
+                    tag = "　·　深度图已跳过（转不出来，保持线稿）"
+                else:
+                    img = dep_img
+                    tag = "　·　深度图（DA）" if how == "da" else "　·　深度图（内置）"
             out_imgs.append(_to_tensor(img))
             out_info.append(f"【{label}】{item['id']}　·　{item['name']}"
-                            f"　·　{img.width}×{img.height}")
+                            f"　·　{img.width}×{img.height}{tag}")
 
-        return (out_imgs[0], out_imgs[1], out_imgs[2], "\n".join(out_info))
+        prompt = build_prompt(提示词模板, pose_item, has_pose=bool(启用_姿势))
+        return (out_imgs[0], out_imgs[1], out_imgs[2], "\n".join(out_info), prompt)
