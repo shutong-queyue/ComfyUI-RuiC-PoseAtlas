@@ -1,0 +1,8 @@
+# 仅用于 Comfy Registry 打包，不影响 git
+__pycache__/
+*.pyc
+.cache/
+docs/
+.git/
+.gitignore
+.gitattributes

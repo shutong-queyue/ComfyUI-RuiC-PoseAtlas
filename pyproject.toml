@@ -1,0 +1,23 @@
+[project]
+name = "ruic-pose-atlas"
+version = "1.0.0"
+description = "One node outputs three reference images (portrait / costume / pose) for Qwen-Image-Edit character composition, with a live preview card panel, per-category roll, pagination and sub-category filters."
+license = { file = "LICENSE" }
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Operating System :: OS Independent",
+]
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[project.urls]
+Repository = "https://github.com/shutong-queyue/ComfyUI-RuiC-PoseAtlas"
+"Bug Tracker" = "https://github.com/shutong-queyue/ComfyUI-RuiC-PoseAtlas/issues"
+
+[tool.comfy]
+PublisherId = "shutong-queyue"
+DisplayName = "RuiC Pose Atlas"
+requires-comfyui = ">=0.3.0"

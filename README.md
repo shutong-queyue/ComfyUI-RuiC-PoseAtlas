@@ -4,19 +4,19 @@
 
 带完整的可视化前端：三张卡片实时预览、单类随机、逐张翻页、子分类筛选、一键屏蔽。
 
-![节点面板：人像 / 衣装 / 姿势 三张卡片，顶部可切换质量与种子](docs/ui.png)
+![节点面板：人像 / 衣装 / 姿势 三张卡片，顶部可切换质量与种子](https://raw.githubusercontent.com/shutong-queyue/ComfyUI-RuiC-PoseAtlas/main/docs/ui.png)
 
 一个节点输出的三张素材，分别对应「是谁」「穿什么」「什么姿势」：
 
-![人像 / 衣装 / 姿势 三类素材示例](docs/showcase.jpg)
+![人像 / 衣装 / 姿势 三类素材示例](https://raw.githubusercontent.com/shutong-queyue/ComfyUI-RuiC-PoseAtlas/main/docs/showcase.jpg)
 
 三张图直接喂给 Qwen-Image-Edit 2.1，一次合成成品——脸来自第一张、衣服来自第二张、姿势来自第三张：
 
-![三张参考图合成一张成品](docs/compare.jpg)
+![三张参考图合成一张成品](https://raw.githubusercontent.com/shutong-queyue/ComfyUI-RuiC-PoseAtlas/main/docs/compare.jpg)
 
 ## 工作流接法
 
-![工作流示意：三图组合 → CLIP / VAE / UNET → Qwen-Image 2.1 文本编码 → KSampler → VAEDecode](docs/workflow.png)
+![工作流示意：三图组合 → CLIP / VAE / UNET → Qwen-Image 2.1 文本编码 → KSampler → VAEDecode](https://raw.githubusercontent.com/shutong-queyue/ComfyUI-RuiC-PoseAtlas/main/docs/workflow.png)
 
 两个要点，接错会静默失败、不报错：
 
