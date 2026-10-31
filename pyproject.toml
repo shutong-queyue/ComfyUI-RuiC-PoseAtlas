@@ -1,6 +1,6 @@
 [project]
 name = "ruic-pose-atlas"
-version = "1.3.0"
+version = "1.3.1"
 description = "One node outputs three reference images (portrait / costume / pose) for Qwen-Image-Edit character composition, with a live preview card panel, per-category roll, pagination and sub-category filters. Includes one-click lineart-to-depth conversion for pose reference."
 license = { file = "LICENSE" }
 readme = "README.md"

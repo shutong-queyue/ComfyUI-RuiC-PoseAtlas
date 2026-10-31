@@ -18,11 +18,13 @@
 
 ![工作流示意：三图组合 → CLIP / VAE / UNET → Qwen-Image 2.1 文本编码 → KSampler → VAEDecode](https://raw.githubusercontent.com/shutong-queyue/ComfyUI-RuiC-PoseAtlas/main/docs/workflow.png)
 
-接线：**姿势 → `image_1`，人像 → `image_2`，衣装 → `image_3`**；`CLIPLoader` 的 type 选 `qwen_image`，`KSampler` 的 latent 接 `TextEncodeQwenImage21` 的 `latent` 输出。节点右侧的「提示词」口直接连文本编码器的 `prompt`。
+接线：**人像 → `image_1`，衣装 → `image_2`，姿势 → `image_3`**（也就是节点输出口从左到右的顺序）；`CLIPLoader` 的 type 选 `qwen_image`，`KSampler` 的 latent 接 `TextEncodeQwenImage21` 的 `latent` 输出。节点右侧的「提示词」口直接连文本编码器的 `prompt`。
+
+出图画布尺寸取自第一张图，所以比例由**人像图**决定；姿势想更稳，点姿势卡片的「◐ 转深度图」再切「🌗 深度版」提示词。
 
 ## 姿势线稿 → 深度图（按张切换）
 
-![同一张姿势线稿与转换后的深度图对比](https://raw.githubusercontent.com/shutong-queyue/ComfyUI-RuiC-PoseAtlas/main/docs/pose_depth.jpg)
+![姿势线稿与转换后的深度图对比：正面、侧面各一组](https://raw.githubusercontent.com/shutong-queyue/ComfyUI-RuiC-PoseAtlas/main/docs/pose_depth.jpg)
 
 素材库里的姿势参考是**白底黑线的人偶线稿**：大片留白 + 细细的轮廓线。这种图喂给模型，空白区域很容易被当成身体的一部分，在侧面、高位、斜角这些视角上尤其容易跑偏。
 
@@ -129,10 +131,10 @@ git clone https://github.com/shutong-queyue/ComfyUI-RuiC-PoseAtlas.git
 
 ![提示词面板：线稿版 / 深度版两套预设，点一下填入](https://raw.githubusercontent.com/shutong-queyue/ComfyUI-RuiC-PoseAtlas/main/docs/prompt.png)
 
-展开面板里的 `📝 提示词`，两版预设点一下直接填入（图 1 = 姿势，图 2 = 人像，图 3 = 衣装）：
+展开面板里的 `📝 提示词`，两版预设点一下直接填入（**图 1 = 人像，图 2 = 衣装，图 3 = 姿势**）：
 
-- **`📐 线稿版`**：把图 1 当纯动态参考，只取姿态 / 朝向 / 重心 / 肢体比例，禁止继承线条、关节、白底与空白头部；适合直接用线稿当姿态参考。
-- **`🌗 深度版`**：把图 1 说成「深度图与姿态结构参考」，只取动作结构，明确不继承人物身份 / 脸部 / 服装 / 背景。配合「转深度图」用。
+- **`📐 线稿版`**：把图 3 当纯动态参考，只取姿态 / 朝向 / 重心 / 肢体比例，禁止继承线条、关节、白底与空白头部；适合直接用线稿当姿态参考。
+- **`🌗 深度版`**：把图 3 说成「深度图与姿态结构参考」，只取动作结构，明确不继承人物身份 / 脸部 / 服装 / 背景。配合「转深度图」用。
 
 **一般直接用预设就够了。** 出图有偏差，先微调预设里的那两句（比如表情、服装细节）；姿势跟不住就点姿势卡片的「◐ 转深度图」再切到「深度版」——深度图对姿势的控制更精准，侧面 / 高位 / 斜角优先试它。
 
@@ -151,7 +153,7 @@ git clone https://github.com/shutong-queyue/ComfyUI-RuiC-PoseAtlas.git
 「质量」被设成了 `缩略图`。切回 `原图` 即可。节点输出的 `信息` 端口会写明每张图的实际像素尺寸，可直接核对。
 
 **姿势跟不住（永远站姿 / 不按参考摆）？**
-先用「📐 线稿版」预设跑一次；还不行就点姿势卡片的「◐ 转深度图」，把提示词切成「🌗 深度版」再试。另外衣装图若是完整的站姿人台，预设里那句「不复制图 3 的人脸、姿态」要留着。
+先点姿势卡片的「◐ 转深度图」，把提示词切成「🌗 深度版」再跑——深度图对姿态的控制最稳。还是不稳的话，看衣装图是不是完整的站姿人台，预设里那句「不复制图 2 的人脸、姿态」要留着。
 
 **点了「转深度图」没反应 / 弹窗提示缺模型？**
 第一次点会问你要不要下载约 95MB 的 DepthAnything V2 Small（从魔搭下载，国内可直连）。点「取消」就不会下。
