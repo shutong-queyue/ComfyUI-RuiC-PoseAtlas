@@ -1,0 +1,16 @@
+# 缓存与运行时产物
+__pycache__/
+*.py[cod]
+*.pyo
+.cache/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 打包
+*.egg-info/
+build/
+dist/
