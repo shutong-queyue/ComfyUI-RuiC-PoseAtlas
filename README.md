@@ -10,6 +10,19 @@
 
 ![人像 / 衣装 / 姿势 三类素材示例](docs/showcase.jpg)
 
+三张图直接喂给 Qwen-Image-Edit 2.1，一次合成成品——脸来自第一张、衣服来自第二张、姿势来自第三张：
+
+![三张参考图合成一张成品](docs/compare.jpg)
+
+## 工作流接法
+
+![工作流示意：三图组合 → CLIP / VAE / UNET → Qwen-Image 2.1 文本编码 → KSampler → VAEDecode](docs/workflow.png)
+
+两个要点，接错会静默失败、不报错：
+
+1. **`CLIPLoader` 的 type 必须选 `qwen_image`**。选 `stable_diffusion` 等其它值会自动回退到通用 Qwen3-VL tokenizer，丢掉参考图的 `<imageN>` 标记和 `image_slots` 位置信息，模型收不到三张参考图，结果完全失控。
+2. **`KSampler` 的 latent 接 `TextEncodeQwenImage21` 的第 3 个输出 `latent`**，不要用 `EmptyLatentImage`。该 latent 是 64 通道、按第一张参考图尺寸生成，换成别的尺寸会让编辑发生偏移。
+
 ## 特性
 
 - **三类素材一次取齐**：人像、衣装、姿势各输出一张 `IMAGE`，另附一个 `STRING` 说明当前选中的素材 ID。

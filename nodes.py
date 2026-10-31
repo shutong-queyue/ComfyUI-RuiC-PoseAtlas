@@ -82,7 +82,7 @@ class RuiCPoseAtlasLoader:
             "required": {
                 # 默认第一项即默认值：默认出原图，避免误用缩略图（400x500 级别）
                 "质量": (["原图", "缩略图"],),
-                "随机种子": ("INT", {"default": 0, "min": 0, "max": 2147483647}),
+                "随机种子": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFFF}),
                 "每次随机": ("BOOLEAN", {"default": False}),
                 "启用_人像": ("BOOLEAN", {"default": True}),
                 "启用_衣装": ("BOOLEAN", {"default": True}),
